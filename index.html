@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Screen">
 <meta name="theme-color" content="#0f0f0f">
 <title>MandiScreen</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f1a18'/%3E%3Crect x='4.5' y='4.5' width='23' height='23' rx='6.5' fill='none' stroke='%23c1613f' stroke-width='2.4'/%3E%3Cpath d='M8.5 18.5c2.6 0 3.4-5 6-5s3 5 5.6 5 2.9-5 3.4-5' fill='none' stroke='%23c1613f' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f1a18'/%3E%3Cg fill='none' stroke='%23c1613f' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='6' width='24' height='17' rx='4.5'/%3E%3Cpath d='M12.5 27h7M9.5 11.5l3 3-3 3M15.5 17.5h6'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..600&family=Geist+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -104,21 +104,36 @@
   .note { font-size: 12px; line-height: 1.5; color: var(--text-muted); }
   .note kbd { font-family: var(--mono); font-size: 11px; color: var(--text); }
 
-  /* ===== PIN ===== */
+  /* ===== PIN: imita o login do proprio console ===== */
   .pin {
-    position: fixed; inset: 0; z-index: 2; display: none; flex-direction: column; justify-content: center; gap: 14px;
-    max-width: 420px; margin: 0 auto; padding: 32px 24px; background: var(--bg);
+    position: fixed; inset: 0; z-index: 2; display: none; place-items: center; overflow-y: auto;
+    padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+    background: radial-gradient(70% 55% at 50% 0%, rgba(217,119,79,.09), transparent 70%), var(--bg);
   }
-  .pin.on { display: flex; }
-  .pin h2 { font-size: 24px; font-weight: 400; letter-spacing: -0.02em; }
-  .pin p { font-size: 14px; line-height: 1.5; color: var(--text-muted); }
-  .pin p.err { color: var(--danger); }
-  .pin input {
-    height: 56px; padding: 0 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
-    color: var(--text); font: 500 24px var(--mono); letter-spacing: .3em;
+  .pin.on { display: grid; }
+  .gate { width: min(100%, 400px); display: flex; flex-direction: column; gap: 20px; }
+  .gate-brand { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+  .gate-brand svg { width: 56px; height: 56px; }
+  .gate-brand h1 { font-size: 30px; font-weight: 400; letter-spacing: -0.02em; }
+  .gate-brand h1 span { color: var(--accent); font-style: italic; }
+  .gate-brand p { margin-top: -8px; font-family: var(--mono); font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--text-muted); }
+  .tty { border: 1px solid var(--border); border-radius: var(--radius); background: #0a0a0a; font-family: var(--mono); }
+  .tty:focus-within { border-color: var(--accent); }
+  .tty-bar { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+  .tty-body { padding: 16px 14px 18px; font-size: 14px; line-height: 1.7; color: #c4c6c4; }
+  .tty-body .ok { color: var(--success); }
+  .tty label { display: flex; align-items: baseline; gap: 10px; cursor: text; }
+  .tty input {
+    flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; outline: none;
+    color: var(--text); font: 500 22px var(--mono); letter-spacing: .32em; caret-color: var(--accent);
   }
-  .pin input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .pin button { height: 52px; }
+  .gate .hint { font-size: 13px; line-height: 1.55; color: var(--text-muted); text-align: center; }
+  .gate .hint b { font-weight: 500; font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .gate .hint.err { color: var(--danger); }
+  .gate button { height: 50px; font-size: 15px; }
+  @media (min-width: 640px) {
+    .gate { padding: 36px 32px 32px; border: 1px solid var(--border); border-radius: var(--radius); background: rgba(22,22,22,.9); }
+  }
 
   @media (prefers-reduced-motion: reduce) {
     .cur { animation: none; }
@@ -130,7 +145,7 @@
 <div class="app">
   <header>
     <div class="brand">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="2.5" y="2.5" width="27" height="27" rx="7" fill="none" stroke="#d9774f" stroke-width="2.4"/><path d="M7.5 18.5c2.8 0 3.7-5.5 6.5-5.5s3.3 5.5 6 5.5 3.2-5.5 4.5-5.5" fill="none" stroke="#d9774f" stroke-width="2.6" stroke-linecap="round"/></svg>
+      <svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="#d9774f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="27" height="20" rx="5"/><path d="M12 28.5h8M9.5 10.5l3.5 3.5-3.5 3.5M16 17.5h6.5"/></svg>
       <h1>Mandi<span>Screen</span></h1>
     </div>
     <nav class="ttys" id="ttys" aria-label="Terminais"></nav>
@@ -167,12 +182,24 @@
   <p class="note">No computador, clique na tela para digitar direto no servidor; <kbd>Esc</kbd> duas vezes devolve o teclado para a página. O console usa teclado americano: acentos e ç não passam.</p>
 </div>
 
-<form class="pin" id="pin">
-  <h2>PIN do MandiScreen</h2>
-  <p id="pinMsg">Está em <b>MANDISCREEN_PIN</b>, no arquivo <b>~/apps/mandiscreen-deploy/.env</b> do servidor.</p>
-  <input id="pinInput" inputmode="numeric" autocomplete="off" maxlength="12" aria-label="PIN">
-  <button class="primary">Entrar</button>
-</form>
+<div class="pin" id="pin">
+  <form class="gate" id="pinForm" autocomplete="off">
+    <div class="gate-brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="#d9774f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="27" height="20" rx="5"/><path d="M12 28.5h8M9.5 10.5l3.5 3.5-3.5 3.5M16 17.5h6.5"/></svg>
+      <h1>Mandi<span>Screen</span></h1>
+      <p>Console do ml-srv-0002</p>
+    </div>
+    <div class="tty">
+      <div class="tty-bar">tty · acesso</div>
+      <div class="tty-body">
+        <div>ml-srv-0002 login: <span class="ok">mandiscreen</span></div>
+        <label for="pinInput">pin:<input id="pinInput" type="text" inputmode="numeric" autocomplete="off" maxlength="12" aria-label="PIN" spellcheck="false"></label>
+      </div>
+    </div>
+    <p class="hint" id="pinMsg">O PIN está em <b>MANDISCREEN_PIN</b> no arquivo <b>~/apps/mandiscreen-deploy/.env</b> do servidor.</p>
+    <button class="primary">Entrar</button>
+  </form>
+</div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -301,12 +328,12 @@ $('monitor').addEventListener('keydown', e => {
 
 /* ---------- PIN ---------- */
 function askPin(msg) {
-  if (msg) { $('pinMsg').textContent = msg; $('pinMsg').className = 'err'; }
+  if (msg) { $('pinMsg').textContent = msg; $('pinMsg').className = 'hint err'; }
   $('pin').classList.add('on');
   $('pinInput').value = '';
   setTimeout(() => $('pinInput').focus(), 50);
 }
-$('pin').addEventListener('submit', e => {
+$('pinForm').addEventListener('submit', e => {
   e.preventDefault();
   token = $('pinInput').value.trim();
   try { localStorage.setItem('mandiscreen-pin', token); } catch {}
