@@ -1,0 +1,328 @@
+<!doctype html>
+<!-- MandiScreen: a tela fisica do servidor (o console no monitor) no navegador, com teclado.
+     Servido pelo Caddy do ml-srv-0002 em http://mandiscreen.lan; /api/* vai para o agente
+     (agent/mandiscreen.py, 127.0.0.1:8097). Tema: o escuro do MandiFlow. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Screen">
+<meta name="theme-color" content="#0f0f0f">
+<title>MandiScreen</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f1a18'/%3E%3Crect x='4.5' y='4.5' width='23' height='23' rx='6.5' fill='none' stroke='%23c1613f' stroke-width='2.4'/%3E%3Cpath d='M8.5 18.5c2.6 0 3.4-5 6-5s3 5 5.6 5 2.9-5 3.4-5' fill='none' stroke='%23c1613f' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..600&family=Geist+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* Tokens do tema escuro do MandiFlow (apps/web/src/styles/global.css) */
+  :root {
+    --bg: #0f0f0f;
+    --surface: #161616;
+    --surface-2: #1e1e1e;
+    --surface-3: #282828;
+    --border: #2c2c2c;
+    --text: #f1f1ef;
+    --text-muted: #9c9f9d;
+    --accent: #d9774f;
+    --accent-soft: rgba(217, 119, 79, 0.14);
+    --success: #5fae86;
+    --danger: #e06a55;
+    --radius: 4px;
+    --font: 'Geist', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    --mono: 'Geist Mono', ui-monospace, monospace;
+    --ease: cubic-bezier(0.2, 0, 0, 1);
+    color-scheme: dark;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body { min-height: 100dvh; background: var(--bg); color: var(--text); font-family: var(--font); -webkit-font-smoothing: antialiased; }
+  .app {
+    max-width: 1280px; min-height: 100dvh; margin: 0 auto; display: flex; flex-direction: column; gap: 12px;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  }
+
+  /* ===== Topo ===== */
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand svg { width: 28px; height: 28px; }
+  .brand h1 { font-size: 19px; font-weight: 400; letter-spacing: -0.01em; }
+  .brand h1 span { color: var(--accent); font-style: italic; }
+  .top-right { display: flex; align-items: center; gap: 12px; }
+  .status { display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+  .status i { width: 7px; height: 7px; border-radius: 50%; background: var(--surface-3); }
+  .status.on i { background: var(--success); box-shadow: 0 0 8px var(--success); }
+  .status.off i { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+  /* ===== Abas de terminal ===== */
+  .ttys { display: flex; gap: 4px; }
+  .ttys button { width: 44px; height: 30px; padding: 0; font: 500 12px var(--mono); letter-spacing: .04em; }
+  .ttys button[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: #1a0f0a; }
+
+  /* ===== Monitor ===== */
+  .monitor { border: 1px solid var(--border); border-radius: var(--radius); background: #0a0a0a; overflow: hidden; }
+  .monitor:focus-within, .monitor:focus { border-color: var(--accent); }
+  .bar {
+    display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted);
+  }
+  .bar b { font-weight: 500; color: var(--text); }
+  .direct { color: var(--accent); }
+  .monitor:not(:focus) .direct { display: none; }
+  .screen { position: relative; padding: 12px; outline: none; cursor: text; overflow-x: auto; }
+  pre {
+    position: relative; width: max-content; font-family: var(--mono); font-size: 14px; line-height: 1.25;
+    color: #c4c6c4; white-space: pre;
+  }
+  pre .b { font-weight: 700; }
+  .cur {
+    position: absolute; width: 1ch; height: 1.25em; background: var(--accent); mix-blend-mode: screen;
+    animation: blink 1.1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .empty { padding: 48px 12px; text-align: center; font-size: 14px; line-height: 1.5; color: var(--text-muted); }
+
+  /* ===== Teclado ===== */
+  form.type { display: flex; gap: 8px; }
+  form.type input {
+    flex: 1; min-width: 0; height: 46px; padding: 0 14px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface); color: var(--text); font: 15px var(--mono);
+  }
+  form.type input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+  button {
+    height: 42px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2);
+    color: var(--text); font: 500 13px var(--font); touch-action: manipulation; cursor: pointer;
+    transition: background-color .12s, border-color .12s, transform .12s var(--ease);
+  }
+  button:active { background: var(--surface-3); border-color: #3a3a3a; transform: scale(.97); }
+  button.primary { height: 46px; padding: 0 18px; background: var(--text); color: var(--bg); border-color: var(--text); }
+  button.ghost { height: 30px; padding: 0 12px; background: transparent; font-size: 12px; color: var(--text-muted); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .note { font-size: 12px; line-height: 1.5; color: var(--text-muted); }
+  .note kbd { font-family: var(--mono); font-size: 11px; color: var(--text); }
+
+  /* ===== PIN ===== */
+  .pin {
+    position: fixed; inset: 0; z-index: 2; display: none; flex-direction: column; justify-content: center; gap: 14px;
+    max-width: 420px; margin: 0 auto; padding: 32px 24px; background: var(--bg);
+  }
+  .pin.on { display: flex; }
+  .pin h2 { font-size: 24px; font-weight: 400; letter-spacing: -0.02em; }
+  .pin p { font-size: 14px; line-height: 1.5; color: var(--text-muted); }
+  .pin p.err { color: var(--danger); }
+  .pin input {
+    height: 56px; padding: 0 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+    color: var(--text); font: 500 24px var(--mono); letter-spacing: .3em;
+  }
+  .pin input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .pin button { height: 52px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cur { animation: none; }
+    *, *::before, *::after { transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="2.5" y="2.5" width="27" height="27" rx="7" fill="none" stroke="#d9774f" stroke-width="2.4"/><path d="M7.5 18.5c2.8 0 3.7-5.5 6.5-5.5s3.3 5.5 6 5.5 3.2-5.5 4.5-5.5" fill="none" stroke="#d9774f" stroke-width="2.6" stroke-linecap="round"/></svg>
+      <h1>Mandi<span>Screen</span></h1>
+    </div>
+    <nav class="ttys" id="ttys" aria-label="Terminais"></nav>
+    <div class="top-right">
+      <div class="status" id="status" role="status"><i></i><span>conectando</span></div>
+      <button class="ghost" id="logout">Sair</button>
+    </div>
+  </header>
+
+  <section class="monitor" id="monitor" tabindex="0" aria-label="Tela do servidor. Com foco, o teclado digita direto no servidor.">
+    <div class="bar"><span><b id="ttyName">tty1</b> · <span id="size">--</span> · ml-srv-0002</span><span class="direct">teclado direto</span></div>
+    <div class="screen" id="screen"><pre id="pre"></pre><p class="empty" id="empty">Lendo a tela do servidor…</p></div>
+  </section>
+
+  <form class="type" id="type" autocomplete="off">
+    <input id="line" placeholder="Comando para o servidor" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-label="Texto para digitar no servidor">
+    <button class="primary">Enviar</button>
+  </form>
+  <div class="keys">
+    <button data-k="enter">Enter</button>
+    <button data-k="esc">Esc</button>
+    <button data-k="tab">Tab</button>
+    <button data-k="ctrl+c">Ctrl+C</button>
+    <button data-k="ctrl+d">Ctrl+D</button>
+    <button data-k="ctrl+l">Ctrl+L</button>
+    <button data-k="backspace" aria-label="Apagar">⌫</button>
+    <button data-k="up" aria-label="Seta para cima">↑</button>
+    <button data-k="down" aria-label="Seta para baixo">↓</button>
+    <button data-k="left" aria-label="Seta para a esquerda">←</button>
+    <button data-k="right" aria-label="Seta para a direita">→</button>
+    <button data-k="pgup">PgUp</button>
+    <button data-k="pgdn">PgDn</button>
+  </div>
+  <p class="note">No computador, clique na tela para digitar direto no servidor; <kbd>Esc</kbd> duas vezes devolve o teclado para a página. O console usa teclado americano: acentos e ç não passam.</p>
+</div>
+
+<form class="pin" id="pin">
+  <h2>PIN do MandiScreen</h2>
+  <p id="pinMsg">Está em <b>MANDISCREEN_PIN</b>, no arquivo <b>~/apps/mandiscreen-deploy/.env</b> do servidor.</p>
+  <input id="pinInput" inputmode="numeric" autocomplete="off" maxlength="12" aria-label="PIN">
+  <button class="primary">Entrar</button>
+</form>
+
+<script>
+const $ = id => document.getElementById(id);
+let token = '';
+try { token = localStorage.getItem('mandiscreen-pin') || ''; } catch {}
+
+/* ---------- Cores do console (atributo VGA: 4 bits de texto, 3 de fundo) ---------- */
+// Ordem VGA (azul antes de vermelho), afinada para o tema escuro
+const VGA = ['#0a0a0a', '#4f7fd9', '#5fae86', '#4fb3b8', '#e06a55', '#b77ad1', '#d9a04f', '#c4c6c4',
+             '#6b6d6b', '#7fa6f0', '#86d6aa', '#7fd8dc', '#ff8f7a', '#d7a0ef', '#f0d07a', '#f1f1ef'];
+
+/* ---------- Tela ---------- */
+const pre = $('pre'), screenEl = $('screen');
+let last = '', cols = 80, polling = false;
+
+function render(s) {
+  cols = s.cols;
+  let html = '';
+  for (const runs of s.lines) {
+    for (const [text, a] of runs) {
+      const fg = a & 15, bg = (a >> 4) & 7;
+      if (a === 7) { html += esc(text); continue; }   // padrao: sem span
+      html += `<span style="color:${VGA[fg]}${bg ? ';background:' + VGA[bg] : ''}"${fg > 7 ? ' class="b"' : ''}>${esc(text)}</span>`;
+    }
+    html += '\n';
+  }
+  html += `<i class="cur" style="left:${s.cx}ch;top:${s.cy * 1.25}em"></i>`;
+  pre.innerHTML = html;
+  $('empty').hidden = true;
+  $('ttyName').textContent = s.tty;
+  $('size').textContent = `${s.cols}×${s.rows}`;
+  for (const b of $('ttys').children) b.setAttribute('aria-current', String(b.dataset.tty === s.tty));
+  fit();
+}
+const esc = t => t.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+
+// Fonte do tamanho que faz as colunas do console caberem na largura
+function fit() {
+  const w = screenEl.clientWidth - 24;
+  pre.style.fontSize = '100px';
+  const per = pre.getBoundingClientRect().width / Math.max(1, ...pre.textContent.split('\n').map(l => l.length), cols);
+  pre.style.fontSize = Math.min(16, Math.max(8, 100 * w / (per * cols))) + 'px';
+}
+addEventListener('resize', fit);
+document.fonts?.ready.then(fit);
+
+async function poll() {
+  if (polling || !token || document.hidden) return;
+  polling = true;
+  try {
+    const r = await fetch('/api/screen', { headers: { 'X-Token': token }, cache: 'no-store' });
+    if (r.status === 401) return askPin('PIN incorreto.');
+    if (r.status === 429) return setStatus('off', 'aguarde 1 min');
+    if (!r.ok) { setStatus('off', 'agente sem acesso'); $('empty').textContent = await r.text(); return; }
+    const body = await r.text();
+    setStatus('on', 'ao vivo');
+    if (body !== last) { last = body; render(JSON.parse(body)); }
+  } catch {
+    setStatus('off', 'sem conexão');
+  } finally {
+    polling = false;
+  }
+}
+function setStatus(cls, text) { const s = $('status'); s.className = 'status ' + cls; s.lastElementChild.textContent = text; }
+
+/* ---------- Envio de teclas (em fila, na ordem) ---------- */
+let queue = [], sending = false;
+function send(line) { queue.push(line); pump(); }
+async function pump() {
+  if (sending || !queue.length) return;
+  sending = true;
+  const body = queue.splice(0).join('\n');
+  try {
+    const r = await fetch('/api/keys', { method: 'POST', headers: { 'X-Token': token }, body });
+    if (r.status === 401) askPin('PIN incorreto.');
+    else if (!r.ok) setStatus('off', 'erro: ' + (await r.text()).slice(0, 40));
+  } catch {
+    setStatus('off', 'sem conexão');
+  } finally {
+    sending = false;
+    setTimeout(poll, 120);   // mostra o efeito logo, sem esperar o proximo ciclo
+    pump();
+  }
+}
+
+$('type').addEventListener('submit', e => {
+  e.preventDefault();
+  const v = $('line').value;
+  if (v) send('t ' + v);
+  send('k enter');
+  $('line').value = '';
+});
+document.querySelectorAll('[data-k]').forEach(b => b.addEventListener('click', () => send('k ' + b.dataset.k)));
+
+for (let n = 1; n <= 6; n++) {
+  const b = document.createElement('button');
+  b.textContent = 'tty' + n; b.dataset.tty = 'tty' + n; b.setAttribute('aria-current', 'false');
+  b.addEventListener('click', () => send('k alt+f' + n));
+  $('ttys').append(b);
+}
+
+/* ---------- Teclado direto (tela em foco, no computador) ---------- */
+const NAMED = { Enter: 'enter', Backspace: 'backspace', Tab: 'tab', Escape: 'esc', ArrowUp: 'up', ArrowDown: 'down',
+  ArrowLeft: 'left', ArrowRight: 'right', Home: 'home', End: 'end', PageUp: 'pgup', PageDown: 'pgdn', Insert: 'insert', Delete: 'delete' };
+let lastEsc = 0;
+$('monitor').addEventListener('keydown', e => {
+  if (e.metaKey) return;   // atalhos do proprio Mac (copiar, trocar de aba)
+  let k = NAMED[e.key] || (/^F([1-9]|1[0-2])$/.test(e.key) ? e.key.toLowerCase() : '');
+  if (e.key === 'Escape') {
+    // Esc duas vezes seguidas solta o teclado
+    if (performance.now() - lastEsc < 600) { $('monitor').blur(); e.preventDefault(); return; }
+    lastEsc = performance.now();
+  }
+  if (k) {
+    if (e.ctrlKey) k = 'ctrl+' + k;
+    if (e.altKey) k = 'alt+' + k;
+    if (e.shiftKey && k === 'tab') k = 'shift+tab';
+    send('k ' + k);
+  } else if (e.key.length === 1) {
+    if ((e.ctrlKey || e.altKey) && /^[a-z0-9]$/i.test(e.key)) send('k ' + (e.ctrlKey ? 'ctrl+' : '') + (e.altKey ? 'alt+' : '') + e.key.toLowerCase());
+    else if (!e.ctrlKey && !e.altKey) send('t ' + e.key);
+    else return;
+  } else return;
+  e.preventDefault();
+});
+
+/* ---------- PIN ---------- */
+function askPin(msg) {
+  if (msg) { $('pinMsg').textContent = msg; $('pinMsg').className = 'err'; }
+  $('pin').classList.add('on');
+  $('pinInput').value = '';
+  setTimeout(() => $('pinInput').focus(), 50);
+}
+$('pin').addEventListener('submit', e => {
+  e.preventDefault();
+  token = $('pinInput').value.trim();
+  try { localStorage.setItem('mandiscreen-pin', token); } catch {}
+  $('pin').classList.remove('on');
+  last = ''; poll();
+});
+$('logout').addEventListener('click', () => {
+  token = ''; queue = [];
+  try { localStorage.removeItem('mandiscreen-pin'); } catch {}
+  askPin();
+});
+
+/* ---------- Inicio ---------- */
+if (!token) askPin(); else poll();
+setInterval(poll, 1000);
+document.addEventListener('visibilitychange', poll);
+</script>
+</body>
+</html>
