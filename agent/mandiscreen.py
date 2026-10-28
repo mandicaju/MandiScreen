@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
-"""MandiScreen: a tela fisica do servidor (o console que aparece no monitor) no navegador.
-Caddy proxia /api/* de mandiscreen.lan para ca (127.0.0.1:8097). Mantido vivo pelo crontab
-do mandicaju (a cada minuto; uma segunda copia so falha ao bindar :8097).
+"""MandiScreen: a tela fisica de um servidor (o console que aparece no monitor) no navegador.
+O celular abre mandiscreen.lan e digita um PIN; o hub do MandiRemote no ml-srv-0002 (que guarda
+os PINs) descobre qual servidor e repassa para o agente dele, na porta 8097. Mantido vivo pelo
+crontab do mandicaju (a cada minuto; uma segunda copia so falha ao bindar :8097).
+
+  mandiscreen.py                                  -> no ml-srv-0002: 127.0.0.1:8097
+  mandiscreen.py --bind 192.168.15.198 --allow 192.168.15.199
+                                                  -> em outro servidor: so o ml-srv-0002 entra
 
   GET  /api/screen  -> {tty, rows, cols, cx, cy, lines: [[[texto, attr], ...], ...]}
   POST /api/keys    -> corpo em texto, um comando por linha:
                          t <texto>            digita (ASCII; o console usa layout US)
                          k <tecla>[+<tecla>]  ex.: k enter, k ctrl+c, k alt+f2 (troca de terminal)
-Tudo exige o cabecalho X-Token com o PIN (MANDISCREEN_PIN em ~/apps/mandiscreen-deploy/.env).
+Sem PIN aqui: so o hub chega (127.0.0.1 com o firewall do ml-srv-0002, ou --allow). Se ainda houver
+MANDISCREEN_PIN em ~/apps/mandiscreen-deploy/.env (instalacao antiga), ele continua sendo exigido.
 
 Le o terminal que esta no monitor agora: /dev/vcsa (cores e cursor) e /dev/vcsu (caracteres
-em Unicode). Digita por um teclado virtual (/dev/uinput), que o console trata como um teclado
+em Unicode; kernel 5.0+. Sem ele, como no rk322x do Pi-hole, os caracteres vem do vcsa). Digita por um teclado virtual (/dev/uinput), que o console trata como um teclado
 USB: este kernel bloqueia injetar direto no tty (dev.tty.legacy_tiocsti = 0).
 Permissoes: mandicaju nos grupos tty (ler a tela) e uinput (regra udev, ver README.txt do deploy).
 
@@ -27,11 +33,12 @@ ENV = os.path.expanduser("~/apps/mandiscreen-deploy/.env")
 
 def parse_screen(vcsa, vcsu):
     """vcsa: 4 bytes (linhas, colunas, x, y do cursor) + pares (caractere, atributo).
-    vcsu: um inteiro de 32 bits por celula com o caractere em Unicode.
+    vcsu: um inteiro de 32 bits por celula com o caractere em Unicode, ou None sem /dev/vcsu.
     Junta celulas vizinhas de mesmo atributo em trechos, para o JSON ficar pequeno."""
     rows, cols, cx, cy = vcsa[0], vcsa[1], vcsa[2], vcsa[3]
     attrs = vcsa[5::2]
-    chars = array.array("I", vcsu)
+    # ponytail: sem vcsu, o byte do vcsa e a posicao na fonte do console; ASCII bate, acento pode sair trocado
+    chars = array.array("I", vcsu) if vcsu is not None else vcsa[4::2]
     lines = []
     for r in range(rows):
         runs = []
@@ -51,8 +58,11 @@ def parse_screen(vcsa, vcsu):
 def read_screen():
     with open("/dev/vcsa", "rb") as f:
         vcsa = f.read()
-    with open("/dev/vcsu", "rb") as f:
-        vcsu = f.read()
+    try:
+        with open("/dev/vcsu", "rb") as f:
+            vcsu = f.read()
+    except FileNotFoundError:
+        vcsu = None
     with open("/sys/class/tty/tty0/active") as f:
         tty = f.read().strip()
     return {"tty": tty, **parse_screen(vcsa, vcsu)}
@@ -146,15 +156,19 @@ def run(line):
 # ---------- HTTP ----------
 
 def load_pin():
-    with open(ENV) as f:
-        for line in f:
-            k, _, v = line.strip().partition("=")
-            if k == "MANDISCREEN_PIN":
-                return v
-    raise SystemExit("MANDISCREEN_PIN ausente em " + ENV)
+    try:
+        with open(ENV) as f:
+            for line in f:
+                k, _, v = line.strip().partition("=")
+                if k == "MANDISCREEN_PIN" and v:
+                    return v
+    except FileNotFoundError:
+        pass
+    return None
 
 
-PIN = None
+PIN = None                  # so instalacoes antigas; o PIN agora fica no hub
+ALLOW = {"127.0.0.1"}       # quem pode pedir (o hub)
 fails, locked_until = 0, 0.0
 
 
@@ -168,6 +182,11 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def authorized(self):
+        if self.client_address[0] not in ALLOW:
+            self.reply(403)
+            return False
+        if PIN is None:
+            return True
         # ponytail: trava global de 1 min depois de 10 PINs errados; por IP se um dia sair da rede de casa
         global fails, locked_until
         if time.time() < locked_until:
@@ -230,7 +249,14 @@ if __name__ == "__main__":
         s = parse_screen(vcsa, vcsu)
         assert (s["rows"], s["cols"], s["cx"], s["cy"]) == (2, 3, 1, 0)
         assert s["lines"] == [[["ab", 4], [" ", 7]], [["xyz", 7]]], s["lines"]
+        assert parse_screen(vcsa, None)["lines"] == s["lines"], "sem vcsu, le os caracteres do vcsa"
         print("ok")
     else:
+        import argparse
+        ap = argparse.ArgumentParser()
+        ap.add_argument("--bind", default="127.0.0.1")
+        ap.add_argument("--allow", action="append", default=[], help="IP que pode pedir (o servidor do hub)")
+        a = ap.parse_args()
+        ALLOW |= set(a.allow)
         PIN = load_pin()
-        HTTPServer(("127.0.0.1", PORT), H).serve_forever()
+        HTTPServer((a.bind, PORT), H).serve_forever()

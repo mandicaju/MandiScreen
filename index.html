@@ -50,6 +50,9 @@
   .brand svg { width: 28px; height: 28px; }
   .brand h1 { font-size: 19px; font-weight: 400; letter-spacing: -0.01em; }
   .brand h1 span { color: var(--accent); font-style: italic; }
+  /* Servidor conectado: o PIN escolhe, o hub devolve o nome em X-Device */
+  .brand small { display: block; margin-top: 1px; font: 500 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); }
+  .brand small:empty { display: none; }
   .top-right { display: flex; align-items: center; gap: 12px; }
   .status { display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
   .status i { width: 7px; height: 7px; border-radius: 50%; background: var(--surface-3); }
@@ -146,12 +149,12 @@
   <header>
     <div class="brand">
       <svg viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="#d9774f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="27" height="20" rx="5"/><path d="M12 28.5h8M9.5 10.5l3.5 3.5-3.5 3.5M16 17.5h6.5"/></svg>
-      <h1>Mandi<span>Screen</span></h1>
+      <div><h1>Mandi<span>Screen</span></h1><small id="device"></small></div>
     </div>
     <nav class="ttys" id="ttys" aria-label="Terminais"></nav>
     <div class="top-right">
       <div class="status" id="status" role="status"><i></i><span>conectando</span></div>
-      <button class="ghost" id="logout">Sair</button>
+      <button class="ghost" id="logout" title="Esquecer o PIN e entrar em outro servidor">Trocar</button>
     </div>
   </header>
 
@@ -196,7 +199,7 @@
         <label for="pinInput">pin:<input id="pinInput" type="text" inputmode="numeric" autocomplete="off" maxlength="12" aria-label="PIN" spellcheck="false"></label>
       </div>
     </div>
-    <p class="hint" id="pinMsg">O PIN está em <b>MANDISCREEN_PIN</b> no arquivo <b>~/apps/mandiscreen-deploy/.env</b> do servidor.</p>
+    <p class="hint" id="pinMsg">Cada servidor tem o seu PIN: ele diz qual console você vai ver. Os PINs estão na aba <b>Acessos</b> do mandilabs.lan.</p>
     <button class="primary">Entrar</button>
   </form>
 </div>
@@ -253,8 +256,11 @@ async function poll() {
     const r = await fetch('/api/screen', { headers: { 'X-Token': token }, cache: 'no-store' });
     if (r.status === 401) return askPin('PIN incorreto.');
     if (r.status === 429) return setStatus('off', 'aguarde 1 min');
+    if (r.status === 502) { setStatus('off', 'servidor fora do ar'); $('empty').textContent = await r.text(); return; }
     if (!r.ok) { setStatus('off', 'agente sem acesso'); $('empty').textContent = await r.text(); return; }
     const body = await r.text();
+    const dev = r.headers.get('X-Device');
+    if (dev) $('device').textContent = decodeURIComponent(dev);
     setStatus('on', 'ao vivo');
     if (body !== last) { last = body; render(JSON.parse(body)); }
   } catch {
@@ -341,7 +347,7 @@ $('pinForm').addEventListener('submit', e => {
   last = ''; poll();
 });
 $('logout').addEventListener('click', () => {
-  token = ''; queue = [];
+  token = ''; queue = []; $('device').textContent = '';
   try { localStorage.removeItem('mandiscreen-pin'); } catch {}
   askPin();
 });
